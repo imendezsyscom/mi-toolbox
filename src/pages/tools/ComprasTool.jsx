@@ -417,7 +417,7 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
       try {
         const res = await fetch('https://ntxzsmlztrmhoxgrxnbc.supabase.co/functions/v1/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+          headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
           body: JSON.stringify({
             to: [a.responsable_email],
             cc: a.nivel === 'CRITICO' && a.jefe_email ? [a.jefe_email] : [],
