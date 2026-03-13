@@ -8,7 +8,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end()
 
-  const { to, cc, subject, html } = req.body || {}
+  const raw = req.body
+  const body = typeof raw === 'string' ? JSON.parse(raw) : (raw || {})
+  const { to, cc, subject, html } = body
 
   if (!to || !subject || !html) {
     return res.status(400).json({ error: 'Faltan campos requeridos: to, subject, html' })
