@@ -380,7 +380,6 @@ function TabOrdenes({ cfg, ordenes, onRefresh }) {
 
 // ─── TAB ALERTAS ──────────────────────────────────────────────
 function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
-  const [dryRun, setDryRun] = useState(true)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null)
 
@@ -414,34 +413,31 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
       if (a.nivel==='OK' || !canSend(a)) { skipped++; continue }
       const subj = `[${a.nivel}] Folio ${a.folio} — ${a.estatus_actual}`
 
-      if (!dryRun) {
-        if (!a.responsable_email) { errors++; continue }
-        const payload = {
-          to: [a.responsable_email],
-          cc: a.nivel === 'CRITICO' && a.jefe_email ? [a.jefe_email] : [],
-          subject: subj,
-          html: buildHTML(a),
-        }
-        try {
-          const res = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-          if (!res.ok) { errors++; continue }
-        } catch { errors++; continue }
-      }
+      if (!a.responsable_email) { errors++; continue }
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: [a.responsable_email],
+            cc: a.nivel === 'CRITICO' && a.jefe_email ? [a.jefe_email] : [],
+            subject: subj,
+            html: buildHTML(a),
+          }),
+        })
+        if (!res.ok) { errors++; continue }
+      } catch { errors++; continue }
 
       await supabase.from('log_notificaciones').insert({
         orden_id: a.id, folio: a.folio, estatus: a.estatus_actual, nivel: a.nivel,
-        para: a.responsable_email, cc: a.nivel==='CRITICO' ? a.jefe_email : '', asunto: subj, dry_run: dryRun
+        para: a.responsable_email, cc: a.nivel==='CRITICO' ? a.jefe_email : '', asunto: subj, dry_run: false
       })
       await supabase.from('ordenes').update({ ultima_alerta_fecha: today(), ultima_alerta_nivel: a.nivel }).eq('id', a.id)
       sent++
     }
     await onRefresh()
     setSending(false)
-    setResult({ sent, skipped, errors, mode: dryRun ? 'Simulación' : 'Enviado' })
+    setResult({ sent, skipped, errors })
   }
 
   const cnt = { C: alertas.filter(a=>a.nivel==='CRITICO').length, P: alertas.filter(a=>a.nivel==='PREVENTIVO').length, O: alertas.filter(a=>a.nivel==='OK').length }
@@ -461,12 +457,8 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
 
       <Card style={{ marginBottom:20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
-          <label style={{ display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer' }}>
-            <input type='checkbox' checked={dryRun} onChange={e=>setDryRun(e.target.checked)} style={{ width:16,height:16,accentColor:C.accent }}/>
-            <div><div style={{ fontWeight:600 }}>Modo simulación (DRY RUN)</div><div style={{ fontSize:11,color:C.textSub }}>No envía correos reales, solo registra en el log</div></div>
-          </label>
-          <Btn onClick={run} disabled={sending}>{sending ? 'Procesando...' : dryRun ? '🧪 Simular' : '📧 Enviar correos'}</Btn>
-          {result && <span style={{ fontSize:12,color:result.errors?C.danger:C.textSub,background:'#F8FAFC',border:`1px solid ${result.errors?C.danger:C.border}`,borderRadius:6,padding:'6px 12px' }}>[{result.mode}] {result.sent} enviadas · {result.skipped} omitidas{result.errors ? ` · ${result.errors} con error` : ''}</span>}
+          <Btn onClick={run} disabled={sending}>{sending ? 'Enviando...' : '📧 Enviar correos'}</Btn>
+          {result && <span style={{ fontSize:12,color:result.errors?C.danger:C.success,background:'#F8FAFC',border:`1px solid ${result.errors?C.danger:C.border}`,borderRadius:6,padding:'6px 12px' }}>{result.sent} enviadas · {result.skipped} omitidas{result.errors ? ` · ${result.errors} con error` : ''}</span>}
         </div>
       </Card>
 
