@@ -415,15 +415,17 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
 
       if (!a.responsable_email) { errors++; continue }
       try {
-        const { error } = await supabase.functions.invoke('send-email', {
-          body: {
+        const res = await fetch('https://ntxzsmlztrmhoxgrxnbc.supabase.co/functions/v1/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+          body: JSON.stringify({
             to: [a.responsable_email],
             cc: a.nivel === 'CRITICO' && a.jefe_email ? [a.jefe_email] : [],
             subject: subj,
             html: buildHTML(a),
-          },
+          }),
         })
-        if (error) { errors++; continue }
+        if (!res.ok) { errors++; continue }
       } catch { errors++; continue }
 
       await supabase.from('log_notificaciones').insert({
