@@ -409,10 +409,29 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
 
   const run = async () => {
     setSending(true); setResult(null)
-    let sent=0, skipped=0
+    let sent=0, skipped=0, errors=0
     for (const a of alertas) {
       if (a.nivel==='OK' || !canSend(a)) { skipped++; continue }
       const subj = `[${a.nivel}] Folio ${a.folio} — ${a.estatus_actual}`
+
+      if (!dryRun) {
+        if (!a.responsable_email) { errors++; continue }
+        const payload = {
+          to: [a.responsable_email],
+          cc: a.nivel === 'CRITICO' && a.jefe_email ? [a.jefe_email] : [],
+          subject: subj,
+          html: buildHTML(a),
+        }
+        try {
+          const res = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!res.ok) { errors++; continue }
+        } catch { errors++; continue }
+      }
+
       await supabase.from('log_notificaciones').insert({
         orden_id: a.id, folio: a.folio, estatus: a.estatus_actual, nivel: a.nivel,
         para: a.responsable_email, cc: a.nivel==='CRITICO' ? a.jefe_email : '', asunto: subj, dry_run: dryRun
@@ -422,7 +441,7 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
     }
     await onRefresh()
     setSending(false)
-    setResult({ sent, skipped, mode: dryRun ? 'Simulación' : 'Enviado' })
+    setResult({ sent, skipped, errors, mode: dryRun ? 'Simulación' : 'Enviado' })
   }
 
   const cnt = { C: alertas.filter(a=>a.nivel==='CRITICO').length, P: alertas.filter(a=>a.nivel==='PREVENTIVO').length, O: alertas.filter(a=>a.nivel==='OK').length }
@@ -447,7 +466,7 @@ function TabAlertas({ cfg, ordenes, logNotif, onRefresh }) {
             <div><div style={{ fontWeight:600 }}>Modo simulación (DRY RUN)</div><div style={{ fontSize:11,color:C.textSub }}>No envía correos reales, solo registra en el log</div></div>
           </label>
           <Btn onClick={run} disabled={sending}>{sending ? 'Procesando...' : dryRun ? '🧪 Simular' : '📧 Enviar correos'}</Btn>
-          {result && <span style={{ fontSize:12,color:C.textSub,background:'#F8FAFC',border:`1px solid ${C.border}`,borderRadius:6,padding:'6px 12px' }}>[{result.mode}] {result.sent} procesadas · {result.skipped} omitidas</span>}
+          {result && <span style={{ fontSize:12,color:result.errors?C.danger:C.textSub,background:'#F8FAFC',border:`1px solid ${result.errors?C.danger:C.border}`,borderRadius:6,padding:'6px 12px' }}>[{result.mode}] {result.sent} enviadas · {result.skipped} omitidas{result.errors ? ` · ${result.errors} con error` : ''}</span>}
         </div>
       </Card>
 
