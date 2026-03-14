@@ -18,7 +18,7 @@ const C = {
 const today = () => new Date().toISOString().slice(0, 10)
 const daysDiff = (from) => { if (!from) return 0; return Math.floor((new Date() - new Date(from)) / 86400000) }
 const fmt = (d) => d ? new Date(d).toLocaleDateString('es-MX') : '—'
-const detectTipo = (f) => { if (!f) return ''; if (f.toUpperCase().startsWith('OC')) return 'OC_STOCK'; if (f.toUpperCase().startsWith('RC')) return 'RC_ESPECIAL'; return '' }
+const detectTipo = (f) => { if (!f) return ''; if (f.toUpperCase().startsWith('C') || f.toUpperCase().startsWith('OC')) return 'OC STOCK'; if (f.toUpperCase().startsWith('RC')) return 'RC'; return '' }
 const getFlow = (cfg, te) => cfg.filter(r => r.tipo_envio === te).sort((a, b) => a.secuencia - b.secuencia)
 const isFinal = (cfg, te, es) => {
   if (es === 'Rechazado') return true
