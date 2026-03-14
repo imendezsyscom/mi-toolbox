@@ -6,7 +6,6 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import Layout from './components/Layout'
 import ComprasTool from './pages/tools/ComprasTool'
-import ExtractorDian from './pages/tools/ExtractorDian'
 
 function PrivateRoute({ session, children }) {
   if (!session) return <Navigate to="/login" replace />
@@ -49,12 +48,7 @@ export default function App() {
             <Layout session={session}><ComprasTool /></Layout>
           </PrivateRoute>
         }/>
-        <Route path="/tools/extractor-dian" element={
-          <PrivateRoute session={session}>
-            <Layout session={session}><ExtractorDian /></Layout>
-          </PrivateRoute>
-        }/>
-        <Route path="*" element={<Navigate to="/" replace />} />
+<Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

@@ -21,7 +21,7 @@ export default function Layout({ session, children }) {
   const navItems = [
     { path:'/', label:'Inicio', icon:'⊞' },
     { path:'/tools/compras', label:'Control Compras', icon:'📦' },
-    { path:'/tools/extractor-dian', label:'Extractor DIAN', icon:'📄' },
+    { path:null, href:'https://claude.ai/artifacts/ec86abfd-db08-4709-90ad-1635b9d51f96', label:'Extractor DIAN', icon:'📄' },
     // Aquí irán apareciendo más herramientas
   ]
 
@@ -47,9 +47,9 @@ export default function Layout({ session, children }) {
 
         <nav style={{ padding:'12px 10px', flex:1 }}>
           {navItems.map(n => {
-            const active = location.pathname === n.path
+            const active = n.path && location.pathname === n.path
             return (
-              <button key={n.path} onClick={() => navigate(n.path)} style={{
+              <button key={n.path || n.href} onClick={() => n.href ? window.open(n.href, '_blank') : navigate(n.path)} style={{
                 width:'100%', display:'flex', alignItems:'center', gap:10,
                 padding:'9px 12px', borderRadius:7, border:'none',
                 background: active ? 'rgba(37,99,235,.2)' : 'transparent',

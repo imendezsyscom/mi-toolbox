@@ -12,7 +12,8 @@ const TOOLS = [
     status: 'active',
   },
   {
-    path: '/tools/extractor-dian',
+    path: null,
+    href: 'https://claude.ai/artifacts/ec86abfd-db08-4709-90ad-1635b9d51f96',
     name: 'Extractor DIAN',
     description: 'Extrae datos y seriales de Declaraciones de Importación (formulario 500) en PDF.',
     icon: '📄',
@@ -42,8 +43,8 @@ export default function Home() {
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:16 }}>
         {TOOLS.map(tool => (
-          <div key={tool.path}
-            onClick={() => tool.status === 'active' && navigate(tool.path)}
+          <div key={tool.path || tool.href}
+            onClick={() => tool.status === 'active' && (tool.href ? window.open(tool.href, '_blank') : navigate(tool.path))}
             style={{
               background:'#fff', border:`1.5px solid ${C.border}`, borderRadius:12,
               padding:24, cursor: tool.status === 'active' ? 'pointer' : 'default',
