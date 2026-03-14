@@ -1,5 +1,8 @@
 // ── ARCHIVO: src/pages/tools/ExtractorDian.jsx ────────────────
 import { useState, useRef, useCallback } from 'react'
+import * as pdfjsLib from 'pdfjs-dist'
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
 // ── Design tokens ──────────────────────────────────────────────
 const C = {
@@ -46,7 +49,8 @@ const TRANSPORT = {
 
 // ── Prompts ────────────────────────────────────────────────────
 const PROMPT_GENERAL = `Eres un extractor de datos de Declaraciones de Importación colombianas (formulario DIAN 500).
-IMPORTANTE: Responde ÚNICAMENTE con el JSON, empezando con { y terminando con }. Cero texto antes o después.
+A continuación recibirás el texto extraído del PDF.
+IMPORTANTE: Responde ÚNICAMENTE con el JSON, empezando con { y terminando con }. Sin texto antes ni después.
 
 {
   "formulario":          "casilla 4 completa con guion y dígito",
@@ -75,16 +79,19 @@ IMPORTANTE: Responde ÚNICAMENTE con el JSON, empezando con { y terminando con }
   "subpartida":          "casilla 59"
 }`
 
-const PROMPT_INDICE = `Eres un extractor de datos de Declaraciones de Importación colombianas (formulario DIAN 500).
-Lee las casillas 91 y 105 (todas las páginas de continuación).
+const PROMPT_ITEMS_Y_SERIALES = `Eres un extractor de datos de Declaraciones de Importación colombianas (formulario DIAN 500).
+A continuación recibirás el texto extraído del PDF. Lee TODO el texto incluyendo páginas de continuación.
 
-Cada item sigue este patrón:
-  PRODUCTO: <desc>, MARCA: <marca>, MODELO: <modelo>, REFERENCIA: <ref>, USO O DESTINO: <uso>, SERIAL: <seriales o NO TIENE>
-  Termina con: / DESCRIPCION SEGÚN FACTURA: ECP NO. ... PART NO. <part_no> ... / CANTIDAD: <n> PIEZAS / (ITEM <n>)
+ESTRUCTURA DE CADA ITEM EN EL PDF:
+  PRODUCTO: <desc>, MARCA: <marca>, MODELO: <modelo>, REFERENCIA: <ref>,
+  USO O DESTINO: <uso>, SERIAL: <seriales separados por coma o "NO TIENE">
+  Termina con: / DESCRIPCION SEGÚN FACTURA: ... PART NO. <part_no> ... / CANTIDAD: <n> PIEZAS / (ITEM <n>)
 
-REGLAS:
-- Si MODELO dice "NO TIENE", usa el valor de REFERENCIA como modelo.
-- "tiene_seriales" es true si SERIAL NO dice "NO TIENE".
+REGLAS CRÍTICAS:
+1. Si MODELO dice "NO TIENE", usa el valor de REFERENCIA como modelo.
+2. Si SERIAL dice "NO TIENE", pon seriales: []
+3. Extrae ABSOLUTAMENTE TODOS los seriales de cada item sin omitir ninguno.
+4. Los seriales son códigos alfanuméricos cortos sin espacios (ej: G1U0BUD04849A).
 
 IMPORTANTE: Responde ÚNICAMENTE con el array JSON, empezando con [ y terminando con ]. Sin texto antes ni después.
 
@@ -93,24 +100,14 @@ IMPORTANTE: Responde ÚNICAMENTE con el array JSON, empezando con [ y terminando
     "item": "1",
     "producto": "descripción máx 80 chars",
     "marca": "marca",
-    "modelo": "modelo (si NO TIENE usar REFERENCIA)",
+    "modelo": "modelo",
     "referencia": "referencia",
     "part_no": "part number",
     "cantidad": "número",
-    "tiene_seriales": true
+    "tiene_seriales": true,
+    "seriales": ["SER001", "SER002"]
   }
 ]`
-
-const promptSerialesItem = (itemNum, modelo, marca, cantidad) =>
-`En la Declaración de Importación adjunta, busca el ITEM ${itemNum} (MODELO: ${modelo}, MARCA: ${marca}).
-Extrae TODOS sus números de serie. Los seriales están después de "SERIAL:" separados por comas,
-y pueden continuar en páginas siguientes hasta "/ DESCRIPCION SEGÚN FACTURA".
-Se esperan aproximadamente ${cantidad} seriales.
-IMPORTANTE:
-- Si SERIAL dice "NO TIENE", responde exactamente: NINGUNO
-- Si hay seriales, escríbelos separados por comas en UNA sola línea, sin saltos de línea, sin corchetes, sin comillas, sin texto adicional.
-- Ejemplo: G1U0BUD04849A,G1U0BUD04852A,G1U0BUD04854B
-- NO pongas texto antes ni después.`
 
 // ── Helpers ────────────────────────────────────────────────────
 const extractJSON = (raw) => {
@@ -135,8 +132,6 @@ const parseSers = (raw) => {
     .filter(s => s.length > 3 && !/\s/.test(s))
 }
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-
 const dlFile = (name, content) => {
   const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" })
   const url  = URL.createObjectURL(blob)
@@ -146,14 +141,20 @@ const dlFile = (name, content) => {
   document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 
-const toBase64 = (file) => new Promise((res, rej) => {
-  const r = new FileReader()
-  r.onload = () => res(r.result.split(",")[1])
-  r.onerror = rej
-  r.readAsDataURL(file)
-})
+const extractTextFromPDF = async (file) => {
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  let fullText = ""
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items.map(item => item.str).join(" ")
+    fullText += `\n--- PÁGINA ${i} ---\n` + pageText
+  }
+  return fullText
+}
 
-const callClaude = async (b64, promptText, maxTok) => {
+const callClaude = async (text, promptText, maxTok) => {
   const key = import.meta.env.VITE_ANTHROPIC_KEY
   if (!key) throw new Error("Falta VITE_ANTHROPIC_KEY en .env")
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -169,10 +170,7 @@ const callClaude = async (b64, promptText, maxTok) => {
       max_tokens: maxTok,
       messages: [{
         role: "user",
-        content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
-          { type: "text", text: promptText }
-        ]
+        content: promptText + "\n\n--- TEXTO DEL PDF ---\n" + text
       }]
     })
   })
@@ -505,7 +503,6 @@ function ResultsScreen({ general, setGeneral, items, formulario, onReset }) {
 // ── Componente principal ───────────────────────────────────────
 export default function ExtractorDian() {
   const [phase, setPhase]               = useState(0) // 0=drop, 1=processing, 2=results
-  const [b64, setB64]                   = useState(null)
   const [general, setGeneral]           = useState({})
   const [items, setItems]               = useState([])
   const [currentStep, setCurrentStep]   = useState(0)
@@ -513,9 +510,9 @@ export default function ExtractorDian() {
   const [error, setError]               = useState(null)
 
   const STEPS = [
+    "Leyendo PDF localmente",
     "Extrayendo datos generales",
-    "Identificando ítems y productos",
-    "Extrayendo números de serie",
+    "Extrayendo productos y seriales",
   ]
 
   const handleFile = async (file) => {
@@ -524,43 +521,25 @@ export default function ExtractorDian() {
     setCurrentStep(0)
     setCurrentDetail("")
     try {
-      const base64 = await toBase64(file)
-      setB64(base64)
-
-      // FASE 1 — Datos generales
+      // PASO 1 — Extraer texto localmente (sin API)
       setCurrentStep(0)
-      setCurrentDetail("Leyendo cabecera de la declaración...")
-      const rawGen = await callClaude(base64, PROMPT_GENERAL, 900)
-      const genData = extractJSON(rawGen)
+      setCurrentDetail("Procesando páginas del PDF...")
+      const pdfText = await extractTextFromPDF(file)
 
-      // FASE 2 — Índice de ítems
+      // PASO 2 — Datos generales
       setCurrentStep(1)
-      setCurrentDetail("Leyendo casillas de ítems...")
-      const rawIdx = await callClaude(base64, PROMPT_INDICE, 3000)
-      const indice = extractJSON(rawIdx)
-
-      // FASE 3 — Seriales por ítem
-      const conSeriales = indice.filter(it => it.tiene_seriales)
-      const sinSeriales = indice.filter(it => !it.tiene_seriales).map(it => ({ ...it, seriales: [] }))
-
-      const BATCH = 3, PAUSE = 1500
-      const resultsSers = []
-      setCurrentStep(2)
-
-      for (let i = 0; i < conSeriales.length; i += BATCH) {
-        const lote = conSeriales.slice(i, i + BATCH)
-        setCurrentDetail(`Procesando ítems ${lote[0].item}–${lote[lote.length-1].item} de ${conSeriales.length}...`)
-        const res = await Promise.all(lote.map(async it => {
-          const raw = await callClaude(base64, promptSerialesItem(it.item, it.modelo, it.marca, it.cantidad), 6000)
-          return { ...it, seriales: parseSers(raw) }
-        }))
-        resultsSers.push(...res)
-        if (i + BATCH < conSeriales.length) await sleep(PAUSE)
+      setCurrentDetail("Leyendo cabecera de la declaración...")
+      const rawGen = await callClaude(pdfText, PROMPT_GENERAL, 900)
+      const genData = extractJSON(rawGen)
+      if (TRANSPORT[genData.tipo_embarque]) {
+        genData.tipo_embarque = TRANSPORT[genData.tipo_embarque]
       }
 
-      // Merge y ordenar por ítem
-      const allItems = [...resultsSers, ...sinSeriales]
-        .sort((a, b) => Number(a.item) - Number(b.item))
+      // PASO 3 — Todos los ítems y seriales en una sola llamada
+      setCurrentStep(2)
+      setCurrentDetail("Extrayendo ítems y números de serie...")
+      const rawItems = await callClaude(pdfText, PROMPT_ITEMS_Y_SERIALES, 16000)
+      const allItems = extractJSON(rawItems)
 
       setGeneral(genData)
       setItems(allItems)
@@ -575,7 +554,6 @@ export default function ExtractorDian() {
 
   const handleReset = () => {
     setPhase(0)
-    setB64(null)
     setGeneral({})
     setItems([])
     setError(null)
