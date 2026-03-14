@@ -11,6 +11,15 @@ const TOOLS = [
     bg: '#EFF6FF',
     status: 'active',
   },
+  {
+    path: '/tools/extractor-dian',
+    name: 'Extractor DIAN',
+    description: 'Extrae datos y seriales de Declaraciones de Importación (formulario 500) en PDF.',
+    icon: '📄',
+    color: '#7C3AED',
+    bg: '#F5F3FF',
+    status: 'active',
+  },
   // Próximas herramientas — descomenta y llena cuando estén listas:
   // { path:'/tools/inventario', name:'Inventario', description:'...', icon:'🗃️', color:'#16A34A', bg:'#F0FDF4', status:'soon' },
   // { path:'/tools/reportes',   name:'Reportes',   description:'...', icon:'📊', color:'#7C3AED', bg:'#F5F3FF', status:'soon' },

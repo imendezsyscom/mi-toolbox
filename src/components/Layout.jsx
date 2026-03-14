@@ -21,6 +21,7 @@ export default function Layout({ session, children }) {
   const navItems = [
     { path:'/', label:'Inicio', icon:'⊞' },
     { path:'/tools/compras', label:'Control Compras', icon:'📦' },
+    { path:'/tools/extractor-dian', label:'Extractor DIAN', icon:'📄' },
     // Aquí irán apareciendo más herramientas
   ]
 
