@@ -13,7 +13,7 @@ const TOOLS = [
   },
   {
     path: null,
-    href: 'https://claude.ai/artifacts/ec86abfd-db08-4709-90ad-1635b9d51f96',
+    href: 'https://claude.ai/artifacts/f88f8e8c-e346-4825-a912-74a001baa308',
     name: 'Extractor DIAN',
     description: 'Extrae datos y seriales de Declaraciones de Importación (formulario 500) en PDF.',
     icon: '📄',

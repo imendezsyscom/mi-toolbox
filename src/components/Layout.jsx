@@ -21,7 +21,7 @@ export default function Layout({ session, children }) {
   const navItems = [
     { path:'/', label:'Inicio', icon:'⊞' },
     { path:'/tools/compras', label:'Control Compras', icon:'📦' },
-    { path:null, href:'https://claude.ai/artifacts/ec86abfd-db08-4709-90ad-1635b9d51f96', label:'Extractor DIAN', icon:'📄' },
+    { path:null, href:'https://claude.ai/artifacts/f88f8e8c-e346-4825-a912-74a001baa308', label:'Extractor DIAN', icon:'📄' },
     // Aquí irán apareciendo más herramientas
   ]
 
